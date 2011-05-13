@@ -153,6 +153,21 @@ sub directory_backup {
     } else {
         $result .= "Remote image mounted successfully.\n";
 
+        # Build any excludes needed
+        my $exclude = "";
+        if($config -> {"directory.$id"} -> {"exclude"}) {
+            my @excludes = split(/,/,$config -> {"directory.$id"} -> {"exclude"});
+
+            # Build up a series of --exclude arguments
+            foreach my $rule (@excludes) {
+                $exclude .= " --exclude='$rule'";
+            }
+        }
+
+        # If the config has an exclude file set, record it.
+        $exclude .= " --exclude-from='".$config -> {"directory.$id"} -> {"excludefile"}."'"
+            if($config -> {"directory.$id"} -> {"excludefile"} && -f $config -> {"directory.$id"} -> {"excludefile"});
+
         # now we need to work out how much data will be transferred, so we know how much to delete
         $result .= "Calculating how much data will be transferred.\n";
         my $trans = `$config->{paths}->{rsync} -az --delete --dry-run --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
