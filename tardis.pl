@@ -84,6 +84,9 @@ sub mysql_backup {
         $result .= "Dumping $dbname to $filename\n";
         $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -a -e $dbname > $filename`;
     }
+
+    my $starttime = time();
+    $result .= "Starting database dump at ".strftime("%Y%m%d-%H%M", localtime(starttime))."\n";
     
     # In either event, pack it
     $result .= `$config->{paths}->{bzip2} $filename`;
@@ -118,6 +121,10 @@ sub mysql_backup {
         $result .= "ERROR: Unable to determine the size of $filename.bz2. Giving up.\n";
     }
 
+    my $stoptime = time();
+    my ($esec, $emin) = (localtime($stoptime - $starttime))[0,1];
+    $result .= "Finished database dump at ".strftime("%Y%m%d-%H%M", localtime(endtime)).sprintf(" (took %02dmin %02dsec)\n", $emin, $esec);;
+
     return $result;
 }
 
@@ -133,6 +140,9 @@ sub directory_backup {
     my ($id, $config) = @_;
     
     my $result .= "Backing up ".$config -> {"directory.$id"} -> {"name"}."...\n";
+
+    my $starttime = time();
+    $result .= "Starting directory backup at ".strftime("%Y%m%d-%H%M", localtime(starttime))."\n";
 
     # Some variables to make life easier...
     my $localdir = $config -> {"directory.$id"} -> {"localdir"};
@@ -208,6 +218,10 @@ sub directory_backup {
             $result .= "Remote image unmounted successfully.\n";
         }
     }
+
+    my $stoptime = time();
+    my ($esec, $emin) = (localtime($stoptime - $starttime))[0,1];
+    $result .= "Finished directory backup at ".strftime("%Y%m%d-%H%M", localtime(endtime)).sprintf(" (took %02dmin %02dsec)\n", $emin, $esec);;
 
     return $result."\n";
 }
