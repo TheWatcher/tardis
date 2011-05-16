@@ -86,7 +86,7 @@ sub mysql_backup {
     }
 
     my $starttime = time();
-    $result .= "Starting database dump at ".strftime("%Y%m%d-%H%M", localtime(starttime))."\n";
+    $result .= "Starting database dump at ".strftime("%Y%m%d-%H%M", localtime($starttime))."\n";
     
     # In either event, pack it
     $result .= `$config->{paths}->{bzip2} $filename`;
@@ -123,7 +123,7 @@ sub mysql_backup {
 
     my $stoptime = time();
     my ($esec, $emin) = (localtime($stoptime - $starttime))[0,1];
-    $result .= "Finished database dump at ".strftime("%Y%m%d-%H%M", localtime(endtime)).sprintf(" (took %02dmin %02dsec)\n", $emin, $esec);;
+    $result .= "Finished database dump at ".strftime("%Y%m%d-%H%M", localtime($stoptime)).sprintf(" (took %02dmin %02dsec)\n", $emin, $esec);;
 
     return $result;
 }
@@ -142,7 +142,7 @@ sub directory_backup {
     my $result .= "Backing up ".$config -> {"directory.$id"} -> {"name"}."...\n";
 
     my $starttime = time();
-    $result .= "Starting directory backup at ".strftime("%Y%m%d-%H%M", localtime(starttime))."\n";
+    $result .= "Starting directory backup at ".strftime("%Y%m%d-%H%M", localtime($starttime))."\n";
 
     # Some variables to make life easier...
     my $localdir = $config -> {"directory.$id"} -> {"localdir"};
@@ -221,7 +221,7 @@ sub directory_backup {
 
     my $stoptime = time();
     my ($esec, $emin) = (localtime($stoptime - $starttime))[0,1];
-    $result .= "Finished directory backup at ".strftime("%Y%m%d-%H%M", localtime(endtime)).sprintf(" (took %02dmin %02dsec)\n", $emin, $esec);;
+    $result .= "Finished directory backup at ".strftime("%Y%m%d-%H%M", localtime($stoptime)).sprintf(" (took %02dmin %02dsec)\n", $emin, $esec);;
 
     return $result."\n";
 }
