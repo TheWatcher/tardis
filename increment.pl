@@ -34,7 +34,7 @@ use FindBin;             # Work out where we are
 my $path;
 BEGIN {
     $ENV{"PATH"} = ""; # Force no path.
-    
+
     delete @ENV{qw(IFS CDPATH ENV BASH_ENV)}; # Clean up ENV
 
     # $FindBin::Bin is tainted by default, so we need to fix that
@@ -46,7 +46,7 @@ use lib "$path/modules"; # Add the script path for module loading
 
 # Custom modules to handle configuration settings and backup operations
 use BackupSupport qw(path_join is_number humanise humanise_minutes dehumanise fallover df);
-use ConfigMicro; 
+use ConfigMicro;
 
 #$SIG{__WARN__} = sub
 #{
@@ -60,7 +60,7 @@ use ConfigMicro;
 # parts of the backup snapshot in $a and $b and compares the numbers (ensuring
 # inverse numeric ordering, rather than the alphanumeric sort would use otherwise)
 #
-# @return 1 if $a should go before $b, 0 if they are the same, -1 if $a should 
+# @return 1 if $a should go before $b, 0 if they are the same, -1 if $a should
 #         go after $b
 sub sort_invnumeric {
     my ($an) = $a =~ /backup\.(\d+)$/;
@@ -72,7 +72,7 @@ sub sort_invnumeric {
 }
 
 
-## @fn $ backup_clearspace($mountpoint, $required, $metafile, $config)
+## @fn $ backup_clearspace($mountpoint, $reqbytes, $reqinodes, $metafile, $config)
 # Attempt to ensure there is enough space in the backup directory for the
 # next backup. This will determine whether the free space avilable in the
 # backup directory is sufficient to contain the required data. If it is
@@ -81,37 +81,39 @@ sub sort_invnumeric {
 # snapshots.
 #
 # @param mountpoint The mountpoint corresponding to the backup directory.
-# @param required   The amount of space required for the next backup, 
-#                   in bytes.
+# @param reqbytes   The amount of space required for the next backup, in bytes.
+# @param reqinodes  The number of inodes needed for the next backup.
 # @param metafile   The backup metadata file.
 # @param config     A reference to the global configuration hash.
 # @return true if there is enough space for the next backup, false if there
 #         is not enough space available even after cleanup.
 sub backup_clearspace {
     my $mountpoint = shift;
-    my $required   = shift;
+    my $reqbytes   = shift;
+    my $reqinodes  = shift;
     my $metafile   = shift;
     my $config     = shift;
 
     # Begin by working out how much space we actually have available
-    my ($size, $used, $free) = df($mountpoint, $config);
+    my ($size, $used, $free, $inodes, $freeinodes) = df($mountpoint, $config);
+
+    # Add buffers
+    $reqbytes  += dehumanise($config -> {"server"} -> {"bytebuffer"});
+    $reqinodes += dehumanise($config -> {"server"} -> {"inodebuffer"});
 
     # Can the required size, plus buffer space, ever actually fit into the drive?
-    # If the requested size is larger than the drive, give up right now...
-    if(($required + dehumanise($config -> {"server"} -> {"safebuffer"})) >= $size) {
+    # If the requested size is larger than the drive, or the drive limits inodes
+    # and there aren't enough, give up right now...
+    if($reqbytes >= $size || ($inodes && $reqinodes >= $inodes)) {
         print "ERROR: Requested backup could never fit into the backup image. Enlarge the image and try again.";
         return 0;
     }
 
-    # Does the required size, plus buffer space, fit in the free space?
-    if(($required + dehumanise($config -> {"server"} -> {"safebuffer"})) <= $free) {
-        print "Requested backup size (",humanise($required),") will fit into available backup space (",humanise($free),").\n";
+    # Does the required size fit in the free space?
+    if($reqbytes <= $free && ($freeinodes == -1 || ($reqinodes < $freeinodes))) {
+        print "Requested backup size plus buffer (",humanise($reqbytes),") will fit into available backup space (",humanise($free),").\n";
         return 1;
-    } 
-
-    # Okay, we need to free up space. Bump the required space to the required + buffer
-    # to make things a little easier first.
-    $required += dehumanise($config -> {"server"} -> {"safebuffer"});
+    }
 
     # Now get a reverse-sorted list of directories to start deleting from
     my @indirs = glob("$mountpoint/backup.*");
@@ -122,29 +124,30 @@ sub backup_clearspace {
         # Are there actually enough backups in the list?
         fallover("ERROR: unable to safely delete any snapshots to free up space (not enough snapshots present).\n", 74)
             if(scalar(@dirs) <= $config -> {"server"} -> {"forcesnaps"});
-        
+
         # Remove the directories that must be retained
         splice(@dirs, -1 * $config -> {"server"} -> {"forcesnaps"});
     }
 
     # Okay, delete directories until we get enough space or have gone through them all...
     my $pos = 0;
-    my $sfree = $free;
-    while(($free < $required) && ($pos < scalar(@dirs))) {
+    my $sfree  = $free;
+    my $sifree = $freeinodes;
+    while((($free < $reqbytes) || ($freeinodes > -1 && $freeinodes < $reqinodes)) && ($pos < scalar(@dirs))) {
         my $deaddir = $dirs[$pos++];
 
         print "Removing $deaddir\n";
 
-	# Check that the directory can be deleted
-	my ($dirid) = $deaddir =~ /\.(\d+)$/;
-	fallover("ERROR: Unable to determine directory id from '$deaddir'. Giving up.\n", 74)
-	    if(!$dirid);
+        # Check that the directory can be deleted
+        my ($dirid) = $deaddir =~ /\.(\d+)$/;
+        fallover("ERROR: Unable to determine directory id from '$deaddir'. Giving up.\n", 74)
+            if(!$dirid);
 
-	# Prevent directories from being deleted if the id is less than the preserve level
-	fallover("ERROR: Unable to remove forcibly preserved directory '$deaddir'.\n", 74)
-	    if($config -> {"server"} -> {"forcesnaps"} && $dirid < $config -> {"server"} -> {"forcesnaps"});
+        # Prevent directories from being deleted if the id is less than the preserve level
+        fallover("ERROR: Unable to remove forcibly preserved directory '$deaddir'.\n", 74)
+            if($config -> {"server"} -> {"forcesnaps"} && $dirid < $config -> {"server"} -> {"forcesnaps"});
 
-	my $cmd = "$config->{paths}->{rm} -rf $deaddir";
+        my $cmd = "$config->{paths}->{rm} -rf $deaddir";
         my ($cmdunt) = $cmd =~ /^(.*)$/;
 
         # This shouldn't output anything, but hey...
@@ -160,16 +163,16 @@ sub backup_clearspace {
         delete $metafile -> {"snapshots"} -> {$backup};
 
         # Update the stats to see whether we have enough free space yet
-        ($size, $used, $free) = df($mountpoint, $config);
+        ($size, $used, $free, $inodes, $freeinodes) = df($mountpoint, $config);
     }
-    
+
     # Have we freed enough for the backup?
-    if($free >= $required) {
+    if($free >= $reqbytes && ($freeinodes == -1 || $freeinodes > $reqinodes)) {
         print "Cleanup has released ",humanise($free - $sfree)," of the oldest backups to make space for new data.\n";
         return 1;
     }
 
-    # Seems not! 
+    # Seems not!
     print "ERROR: Unable to release enough space for new backup data.\n";
     return 0;
 }
@@ -191,13 +194,13 @@ sub backup_increment {
     my $metafile   = shift;
     my $config     = shift;
 
-    # get the directories in the backup 
+    # get the directories in the backup
     my @sdirs = glob("$mountpoint/backup.*");
     my @dirs = sort sort_invnumeric @sdirs if(scalar(@sdirs));
 
     # work out what the last snapshot number is if we have more than 1 backup directory (backup.0)
     if(scalar(@dirs) > 1) {
-        my ($count) = $dirs[0] =~ /backup\.(\d+)$/; 
+        my ($count) = $dirs[0] =~ /backup\.(\d+)$/;
 
         # Count MUST be 1 or greater, it must NEVER be 0, or all hell breaks loose
         if($count >= 1) {
@@ -205,11 +208,11 @@ sub backup_increment {
             # Move the snaps along by one.
             for(my $i = $count; $i > 0; --$i) {
                 my $j = $i + 1;
-                
+
                 # Work out the source and destination directory names
                 my $src = path_join($mountpoint, "backup.$i");
                 my $dst = path_join($mountpoint, "backup.$j");
-                
+
                 # If the source exists, move it to the destination
                 if(-d $src) {
                     print `$config->{paths}->{mv} $src $dst 2>&1`;
@@ -224,7 +227,7 @@ sub backup_increment {
             return 0;
         }
     }
-    
+
     # If the base snapshot exist, use cpio to create the next one. This
     # has the effect of doing copy-on-write when used with rsync as
     # hard links in .0 are unlinked before update/delete, but they
@@ -233,7 +236,7 @@ sub backup_increment {
     if(-d $snap) {
         my $copy = path_join($mountpoint, "backup.1");
         print "Coping $snap to $copy\n";
-        
+
         # Do the cpio, reword the block return if needed (which we hopt it will be
         my $cpres = `cd $snap && $config->{paths}->{find} . -print | $config->{paths}->{cpio} -dplm $copy 2>&1`;
         $cpres =~ s/0 blocks/cpio reports all files created as links, 0 blocks written (Note: this is good)./;
@@ -248,11 +251,11 @@ sub backup_increment {
 
 ## @fn void display_stats($mountpoint, $required, $metafile, $config)
 # Print out statistics about the backup image. This will attempt to determine
-# how much space is left for backups, or how long backups are being retained 
+# how much space is left for backups, or how long backups are being retained
 # for.
 #
 # @param mountpoint The mountpoint corresponding to the backup directory.
-# @param required   The amount of space required for the next backup, 
+# @param required   The amount of space required for the next backup,
 #                   in bytes.
 # @param metafile   The backup metadata file.
 # @param config     A reference to the global configuration hash.
@@ -266,7 +269,7 @@ sub display_stats {
     my ($size, $used, $free) = df($mountpoint, $config);
 
     # get the list of backup directories...
-    my @bdirs = glob("$mountpoint/backup.*");    
+    my @bdirs = glob("$mountpoint/backup.*");
 
     printf("Image contains %s worth of backups, occupying %s space.\n", humanise_minutes(scalar(@bdirs) * $config -> {"client"} -> {"backupfreq"}), humanise($used));
 
@@ -285,7 +288,7 @@ sub display_stats {
 fallover("ERROR: This script must be run as root to operate successfully.\n")
     if($> != 0);
 
-# We need three arguments: the config, the id of the directory to increment, 
+# We need three arguments: the config, the id of the directory to increment,
 # and the space needed
 if(scalar(@ARGV) == 3) {
 
@@ -299,7 +302,7 @@ if(scalar(@ARGV) == 3) {
     fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
-    # Load the configuration 
+    # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
         or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
@@ -309,41 +312,46 @@ if(scalar(@ARGV) == 3) {
         # Check that the third argument - the space required - is numeric
         if(is_number($ARGV[2])) {
 
-            # Check that the directory exists, we don't want to do anything if it doesn't
-            if($config -> {"directory.$ARGV[1]"}) {
+            # Check that the fourth argument - the inodes required - is numeric
+            if(is_number($ARGV[3])) {
+                # Check that the directory exists, we don't want to do anything if it doesn't
+                if($config -> {"directory.$ARGV[1]"}) {
 
-                # Work out what the mountpoint for the directory is...
-                my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$ARGV[1]"} -> {"remotedir"});
+                    # Work out what the mountpoint for the directory is...
+                    my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$ARGV[1]"} -> {"remotedir"});
 
-                # Okay, make sure that the directory exists
-                if(-d $mountpoint) {
-                    # Now we need to grab the metafile
-                    my $metafile = ConfigMicro -> new(path_join($mountpoint, ".tardis_meta"));
-                    if($metafile) {
+                    # Okay, make sure that the directory exists
+                    if(-d $mountpoint) {
+                        # Now we need to grab the metafile
+                        my $metafile = ConfigMicro -> new(path_join($mountpoint, ".tardis_meta"));
+                        if($metafile) {
 
-                        # We have the metafile, mountpoint, and other gubbins. Time to make sure we have space...
-                        if(backup_clearspace($mountpoint, dehumanise($ARGV[2]), $metafile, $config)) {
-                        
-                            # now move all the backups down one
-                            backup_increment($mountpoint, $metafile, $config);
+                            # We have the metafile, mountpoint, and other gubbins. Time to make sure we have space...
+                            if(backup_clearspace($mountpoint, dehumanise($ARGV[2]), dehumanise($ARGV[3]), $metafile, $config)) {
 
-                            display_stats($mountpoint, dehumanise($ARGV[2]), $metafile, $config);
+                                # now move all the backups down one
+                                backup_increment($mountpoint, $metafile, $config);
+
+                                display_stats($mountpoint, dehumanise($ARGV[2]), $metafile, $config);
+                            }
+
+                            # Write back the metafile to record the changes made. This needs to be done even
+                            # if the cleanup fails, as we may have deleted directories...
+                            $metafile -> write(undef, 1)
+                                or fallover("ERROR: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
+
+                            print "Increment completed successfully.\n";
+                        } else {
+                            fallover("ERROR: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
                         }
-
-                        # Write back the metafile to record the changes made. This needs to be done even
-                        # if the cleanup fails, as we may have deleted directories...
-                        $metafile -> write(undef, 1)
-                            or fallover("ERROR: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
-
-                        print "Increment completed successfully.\n";
-                    } else {
-                        fallover("ERROR: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
+                    } else { # if(-d $mountpoint) {
+                        fallover("ERROR: backup directory does not exist. This should not happen.\n", 74);
                     }
-                } else { # if(-d $mountpoint) {
-                    fallover("ERROR: backup directory does not exist. This should not happen.\n", 74);
+                } else { # if($config -> {"directory.$ARGV[1]"}) {
+                    fallover("ERROR: The specified directory id is not valid.\n");
                 }
-            } else { # if($config -> {"directory.$ARGV[1]"}) {
-                fallover("ERROR: The specified directory id is not valid.\n");
+            } else { # if(is_number($ARGV[3])) {
+                fallover("ERROR: required inodes must be numeric.\n", 64);
             }
         } else { # if(is_number($ARGV[2])) {
             fallover("ERROR: required space must be numeric.\n", 64);
