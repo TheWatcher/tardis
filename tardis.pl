@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
-## @file 
-# Client-size script for the remote backup system. 
+## @file
+# Client-size script for the remote backup system.
 # This script should be run on the machine containing the resources to
 # back up on the remote system. It coordinates the execution of remote
 # maintenance scripts, and performs the necessary dumps, packing, and
@@ -36,7 +36,7 @@ BEGIN {
 
     # $FindBin::Bin is tainted by default, so we may need to fix that
     # NOTE: This may be a potential security risk, but the chances
-    # are honestly pretty low... 
+    # are honestly pretty low...
     if ($FindBin::Bin =~ /(.*)/) {
         $path = $1;
     }
@@ -44,7 +44,7 @@ BEGIN {
 use lib "$path/modules"; # Add the script path for module loading
 
 # Custom modules to handle configuration settings and backup operations
-use ConfigMicro; 
+use ConfigMicro;
 use BackupSupport qw(fallover path_join start_log stop_log write_log humanise);
 
 $SIG{__WARN__} = sub
@@ -78,7 +78,7 @@ sub mysql_backup {
     if(!$dbname) {
         $result .= "Dumping all databases to $filename\n";
         $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -A -a -e > $filename`;
-    
+
     # Otherwise, we just want that one database...
     } else {
         $result .= "Dumping $dbname to $filename\n";
@@ -87,7 +87,7 @@ sub mysql_backup {
 
     my $starttime = time();
     $result .= "Starting database dump at ".strftime("%Y%m%d-%H%M", localtime($starttime))."\n";
-    
+
     # In either event, pack it
     $result .= `$config->{paths}->{bzip2} $filename`;
 
@@ -110,7 +110,7 @@ sub mysql_backup {
             # Otherwise, copy the dump over
             $result .= "Copying $filename.bz2 to backup server\n";
             $result .= `$config->{paths}->{scp} $filename.bz2 $config->{server}->{dbdump} 2>&1`;
-        
+
             # Now remove the dump
             unlink("$filename.bz2")
                 or $result .= "WARNING: Unable to remove $filename.bz2: $!\n";
@@ -138,7 +138,7 @@ sub mysql_backup {
 # @return A string containing progress information.
 sub directory_backup {
     my ($id, $config) = @_;
-    
+
     my $result .= "Backing up ".$config -> {"directory.$id"} -> {"name"}."...\n";
 
     my $starttime = time();
@@ -182,19 +182,20 @@ sub directory_backup {
         $result .= "Calculating how much data will be transferred.\n";
         my $trans = `$config->{paths}->{rsync} -az --delete $exclude --dry-run --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
 
-        # Parse out the amount to be transferred
-        my ($update) = $trans =~ /^Total transferred file size: (\d+) bytes$/m;
+        # Parse out the amount to be transferred and the file count
+        my ($update)  = $trans =~ /^Total transferred file size: (\d+) bytes$/m;
+        my ($idnodes) = $trans =~ /^Number of files transferred: (\d+)$/m;
 
         # If we can't determine the file size, something may be wrong
-        if(defined($update)) {
+        if(defined($update) && defined($inodes)) {
             $result .= "Incrementing remote backup, $update bytes required for current backup.\n";
-            my $inc  = `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{shift} $config->{configname} $id $update 2>&1'`;
+            my $inc  = `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{shift} $config->{configname} $id $update $inodes 2>&1'`;
             $result .= $inc;
-        
+
             # Do nothing if there were errors
             if($inc =~ /ERROR:/) {
                 $result .= "ERROR: Remote system reported one or more errors. Aborting directory backup.";
-                
+
                 # Otherwise go ahead and rsync
             } else {
                 $result .= "Updating remote backup.\n";
@@ -205,7 +206,7 @@ sub directory_backup {
                 $result .= `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{mark} $config->{configname} $id $config->{starttime} 2>&1'`;
             }
         } else {
-            $result .= "Unable to determine rsync transfer amount. Backup aborted for safety.\n";
+            $result .= "ERROR: Unable to determine rsync transfer amount. Backup aborted for safety.\n";
         }
 
         # Try to unmount the remote image
@@ -240,7 +241,7 @@ if(scalar(@ARGV) == 1) {
     fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
-    # Load the configuration 
+    # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
         or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
@@ -263,7 +264,7 @@ if(scalar(@ARGV) == 1) {
     $email .= "To: $config->{email}->{recipient}\n";
     $email .= "Subject: $config->{email}->{subject} ($config->{timestamp})\n\n";
     $email .= "This is the backup script on $config->{client}->{name} run at $config->{timestamp}.\n\n";
-    
+
     # Turn on logging from this point, if needed.
     $email .= start_log($config -> {"client"} -> {"logfile"}, $config -> {"timestamp"}, $config -> {"client"} -> {"logcount"});
 
@@ -281,7 +282,7 @@ if(scalar(@ARGV) == 1) {
         foreach my $key (sort(keys(%$config))) {
             # Only process actual database entries...
             next unless($key =~ /^database.\d+$/);
-            
+
             if($config -> {$key} -> {"type"} eq "mysql") {
                 my $res =mysql_backup($config -> {$key} -> {"dumpname"},
                                       $config -> {$key} -> {"dbname"},
@@ -298,7 +299,7 @@ if(scalar(@ARGV) == 1) {
             }
         }
         write_log($email, "Database backup completed.\n\n");
-        
+
         if(!$abort) {
             # Process all the backup directories.
             write_log($email, "Backing up directory trees...\n");
@@ -306,7 +307,7 @@ if(scalar(@ARGV) == 1) {
                 # Only process actual directory entries...
                 next unless($key =~ /^directory.(\d+)$/);
                 my $dirid = $1;
-                
+
                 my $res = directory_backup($dirid, $config);
                 write_log($email,$res);
 
