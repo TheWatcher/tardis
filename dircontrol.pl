@@ -5,16 +5,16 @@
 # code needed to create, mount, and unmount backup directory images on the
 # server. It should be called to mount a backup image before doing the
 # backup increment and rsync operations, and then called to unmount the
-# backup image once the backup operations are complete. Image file size 
+# backup image once the backup operations are complete. Image file size
 # and usage are reported on successful mount or unmount. Any error conditions
-# encountered during execution will result in "ERROR: ..." printed to 
+# encountered during execution will result in "ERROR: ..." printed to
 # STDERR, and the caller should assume that the backup can not be used safely.
 #
 # @note This script *MUST* run as root (not even setuid - you need to use
-#       sudo at least): it makes use of several features only available to 
-#       root. Notably, it needs to be able to mount an imagefile without 
-#       an entry in fstab, and more importantly it needs to be able to 
-#       unmount a loop device (which a normal user can't do, even if the 
+#       sudo at least): it makes use of several features only available to
+#       root. Notably, it needs to be able to mount an imagefile without
+#       an entry in fstab, and more importantly it needs to be able to
+#       unmount a loop device (which a normal user can't do, even if the
 #       imagefile is in fstab).
 #
 # @author  Chris Page &lt;chris@starforge.co.uk&gt;
@@ -39,7 +39,7 @@ use FindBin;             # Work out where we are
 my $path;
 BEGIN {
     $ENV{"PATH"} = ""; # Force no path.
-    
+
     delete @ENV{qw(IFS CDPATH ENV BASH_ENV)}; # Clean up ENV
 
     # $FindBin::Bin is tainted by default, so we need to fix that
@@ -51,7 +51,7 @@ use lib "$path/modules"; # Add the script path for module loading
 
 # Custom modules to handle configuration settings and backup operations
 use BackupSupport qw(path_join humanise dehumanise fallover df);
-use ConfigMicro; 
+use ConfigMicro;
 
 #$SIG{__WARN__} = sub
 #{
@@ -61,8 +61,8 @@ use ConfigMicro;
 
 
 ## @fn void print_stats($imagefile, $mountpoint, $config)
-# Print the disc usage stats for the backup image mounted on the specified 
-# mountpoint, and some information about the sparse imagefile. 
+# Print the disc usage stats for the backup image mounted on the specified
+# mountpoint, and some information about the sparse imagefile.
 #
 # @param imagefile  The imagefile to show stats for.
 # @param mountpoint The mountpoint to show the stats for.
@@ -76,15 +76,16 @@ sub print_stats {
     my $image_appear = `$config->{paths}->{du} -b $imagefile`;
 
     # pull out numbers we want from the stats first
-    my ($msize, $mused, $mfree) = df($mountpoint, $config);
+    my ($msize, $mused, $mfree, $inodes, $ifree) = df($mountpoint, $config);
     if(defined($msize) && defined($mused) && defined($mfree)) {
-        printf("Backup usage: %s of %s (%d%%) used, %s (%d%%) free.\n",
+        printf("Backup usage: %s of %s (%d%%) used, %s (%d%%) free%s.\n",
                humanise($mused), humanise($msize), 100 * ($mused / $msize),
-               humanise($mfree), 100 * ($mfree / $msize));
+               humanise($mfree), 100 * ($mfree / $msize),
+               $inodes ? sprintf("%d of %d inodes used, %d free", $inodes - $ifree, $inodes, $ifree) : "");
     } else {
         print "Unable to determine backup statistics.\n";
     }
-    
+
     # Now interpret and use the image information
     my ($realsize) = $image_real =~ /^(\d+)/;
     my ($appearsize) = $image_appear =~ /^(\d+)/;
@@ -132,7 +133,7 @@ sub check_mountpoint {
 
 
 ## @fn $ check_imagefile($imagefile, $filesize, $fstype, $mkfsargs, $config)
-# Determine whether the imagefile exists. If it does not, create it as a 
+# Determine whether the imagefile exists. If it does not, create it as a
 # sparse image file and format it with the specified filesystem.
 #
 # @param imagefile  The name of the imagefile to check.
@@ -160,14 +161,14 @@ sub check_imagefile {
 
     # Okay, it doesn't exist in any form, so we can create it...
     my $dd = `$config->{paths}->{dd} if=/dev/zero of=$imagefile bs=1 count=1 seek=$filesize 2>&1`;
-    
+
     # Check that dd worked and the image is there
     if($dd !~ /^1 byte\s*\(1 B\) copied/m) {
         chomp($dd);
         warn "ERROR: imagefile $imagefile creation failed. dd returned:\n'$dd'\n";
         return 0;
     }
-    
+
     if(!-f $imagefile) {
         warn "ERROR: imagefile $imagefile is missing after create.\n";
         return 0;
@@ -178,7 +179,7 @@ sub check_imagefile {
     # Okay, the imagefile is there, now we need to format it.
     # First we need to get the image connected to a loop device
     my $losetup = `$config->{paths}->{losetup} -f --show $imagefile 2>&1`;
-    
+
     # check that losetup could be used
     if($losetup =~ /no permission to look at/) {
         warn "ERROR: unable to create imagefile: $losetup";
@@ -214,10 +215,10 @@ sub check_imagefile {
 
 
 ## @fn $ mount_imagefile($imagefile, $mountpoint, $filesystem, $mountargs, $size, $user, $group, $config)
-# Try to mount the specified image file and verify its size. This will check 
-# whether the image is already mounted before trying to mount it. Once the 
+# Try to mount the specified image file and verify its size. This will check
+# whether the image is already mounted before trying to mount it. Once the
 # image is mounted, the size is checked against the setting stored in the
-# drive. If the size setting is not found, it is created. 
+# drive. If the size setting is not found, it is created.
 #
 # @param imagefile  The name of the imagefile to mount.
 # @param mountpoint The mountpoint to mount the imagefile on.
@@ -269,7 +270,7 @@ sub mount_imagefile {
 
         # Okay, here we go...
         $mount = `$config->{paths}->{mount} -t $filesystem $imagefile $mountpoint $args 2>&1`;
-        
+
         # Did it work?
         if((($? & 0xFF00) >> 8) != 0) {
             warn "ERROR: Unable to mount $imagefile on $mountpoint.\nERROR: mount returned: $mount\n";
@@ -329,19 +330,19 @@ sub mount {
         my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$id"} -> {"remotedir"});
         my $imagefile  = $mountpoint.".timg";
         my $filesize   = dehumanise($config -> {"directory.$id"} -> {"maxsize"});
-       
+
 
         if(check_mountpoint($mountpoint)) {
             # We need to record the result from mount, to see whether we need to
             # provide extra information to mount_imagefile
-            if(my $imagestate = check_imagefile($imagefile, 
-                                                $filesize, 
+            if(my $imagestate = check_imagefile($imagefile,
+                                                $filesize,
                                                 $config -> {"server"} -> {"fstype"},
-                                                $config -> {"server"} -> {"fsopts"}, 
+                                                $config -> {"server"} -> {"fsopts"},
                                                 $config)) {
                 # okay, now we can actually mount the image
-                if(my $size = mount_imagefile($imagefile, 
-                                              $mountpoint, 
+                if(my $size = mount_imagefile($imagefile,
+                                              $mountpoint,
                                               $config -> {"server"} -> {"fstype"},
                                               $config -> {"server"} -> {"mountargs"},
                                               $filesize,
@@ -387,26 +388,26 @@ sub unmount {
 
         # Don't bother doing anything if the mountpoint isn't there
         if(check_mountpoint($mountpoint, 0)) {
-            
+
             # Is the mountpoint actually mounted?
             my $mount = `$config->{paths}->{mount} -l | $config->{paths}->{grep} $mountpoint 2>&1`;
-            
+
             if($mount) {
                 print_stats($imagefile, $mountpoint, $config);
 
                 # image is mounted, attempt to unmount it...
                 $mount = `$config->{paths}->{umount} $mountpoint`;
-                
+
                 # Did the unmount work? If so, umount will have exited with status 0.
                 if(($? & 0xFF00) >> 8 == 0) {
                     print "Backup image unmounted successfully.\n";
                     return 1;
                 }
-                
+
                 warn "WARNING: Unable to unmount backup image. umount returned: $mount";
             } else {
                 warn "ERROR: $mountpoint isn't mounted?! This should not happen!\n";
-            }   
+            }
         }
     } else {
         warn "ERROR: Invalid directory id specified.\n";
@@ -420,7 +421,7 @@ sub unmount {
 fallover("ERROR: This script must be run as root to operate successfully.\n")
     if($> != 0);
 
-# Make sure that we have enough arguments. We need three: the config name, the id 
+# Make sure that we have enough arguments. We need three: the config name, the id
 # of the directory to work on, and the operation to perform ('mount' or 'umount')
 if(scalar(@ARGV) == 3) {
 
@@ -434,7 +435,7 @@ if(scalar(@ARGV) == 3) {
     fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
-    # Load the configuration 
+    # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
         or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
@@ -445,7 +446,7 @@ if(scalar(@ARGV) == 3) {
         # determine which operation is required
         if($ARGV[2] eq "mount") {
             mount($ARGV[1], $config);
-            
+
         } elsif($ARGV[2] eq "umount") {
             unmount($ARGV[1], $config);
         } else {
