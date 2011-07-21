@@ -1,6 +1,6 @@
 ## @file
 # Implementation of backup support functionality. This file contains the code
-# needed to support the backup operations and maintenance work done by the 
+# needed to support the backup operations and maintenance work done by the
 # other scripts.
 #
 # @author  Chris Page &lt;chris@starforge.co.uk&gt;
@@ -67,7 +67,7 @@ sub path_join {
 
 ## @fn $ humanise($number)
 # Convert a number in bytes into a more easily read string. This will take a
-# number in bytes and output a string containing the equivalent translated 
+# number in bytes and output a string containing the equivalent translated
 # into KB, MB, or GB depending uppon the size of the number.
 #
 # @param number The number of bytes.
@@ -82,10 +82,10 @@ sub humanise {
     # Less than 1MB but at least 1K, return in KB
     } elsif($number < 1048576) {
         # Fractional KB are dropped, they're not worth bothering with
-        return sprintf("%dK", $number / 1024); 
+        return sprintf("%dK", $number / 1024);
 
     # 1MB or more, but less than 1GB, return in MB
-    } elsif($number < 1073741824) { 
+    } elsif($number < 1073741824) {
         # This time retain a small amount of fractional information
         my $newnum = sprintf("%.1f", $number / 1048576);
         $newnum =~ s/\.0//; # strip the trailing .0 if there is one
@@ -102,7 +102,7 @@ sub humanise {
 
 
 ## @fn $ humanise_minutes($number)
-# convert a number of minutes to years/months/weeks/days/hours. This will take 
+# convert a number of minutes to years/months/weeks/days/hours. This will take
 # the specified number of minutes and output a string containing the number of
 # years, months, weeks, and days it corresponds to.
 #
@@ -115,7 +115,7 @@ sub humanise_minutes {
 
     $mins = $number % 60;
     $number  = ($number - $mins) / 60;
-    
+
     if($number) {
         $hours  = $number % 24;
         $number = ($number - $hours) / 24;
@@ -127,7 +127,7 @@ sub humanise_minutes {
     }
 
     if($weeks) { $result .= $weeks." week"  .($weeks > 1 ? "s" : ""); }
-    if($days) { 
+    if($days) {
         $result .= ", " if($result);
         $result .= $days ." day"   .($days  > 1 ? "s" : "");
     }
@@ -148,8 +148,8 @@ sub humanise_minutes {
 
 ## @fn $ dehumanise($number)
 # Given a number (which may end in K, M, G, or KB, MB, GB) return a number that
-# is the equivalent in bytes. This is the opposite of the humanise() function, 
-# in that it can, for example, take a number like 20G and return the value 
+# is the equivalent in bytes. This is the opposite of the humanise() function,
+# in that it can, for example, take a number like 20G and return the value
 # 21474836480.
 #
 # @param number The number to convert to bytes.
@@ -165,7 +165,7 @@ sub dehumanise {
         return $num;
 
     # Otherwise, deal with KB, MB, and GB.
-    } elsif($multi eq "K") { 
+    } elsif($multi eq "K") {
         return $num * 1024;
     } elsif($multi eq "M") {
         return $num * 1048576;
@@ -185,7 +185,7 @@ sub dehumanise {
 sub is_number {
     my $number = shift;
 
-    # Allow numbers to be of the form <digits>[.<digits>] followed by an optional 
+    # Allow numbers to be of the form <digits>[.<digits>] followed by an optional
     # K, M or G and then an optional B (the B is always going to be implicit and
     # discarded anyway)
     return 1 if($number =~ /^\d+(\.\d+)?(K|M|G)?B?$/);
@@ -197,19 +197,29 @@ sub is_number {
 ## @fn @ df($path, $config)
 # Obtain the size, usage, and free space on the device corresponding to the specified path.
 # This will run df on the specified path and parse out the device size, used space and
-# free space.
+# free space, and the number of free inodes. On filesystems that do not limit inodes (like
+# reiserfs) this will always return -1 for the free inodes.
 #
 # @param path   The path to run df on.
 # @param config A reference to the system configuration hash.
-# @return An array of three values: the device size, used space, and free space, all in bytes.
+# @return An array of five values: the device size, used space, and free space, all in bytes, and
+#         the number of inodes and free inodes available.
 sub df {
     my $path   = shift;
     my $config = shift;
 
+    # Work out the space used, free, etc...
     my $df_stats  = `$config->{paths}->{df} -B 1 $path`;
     my ($msize, $mused, $mfree) = $df_stats =~ m{^/dev/\S+?\s+(\d+)\s+(\d+)\s+(\d+)}m;
-    
-    return ($msize, $mused, $mfree);
+
+    # Now work out inodes...
+    $df_stats = `$config->{paths}->{df} -i $path`;
+    my ($inodes, $ifree) = $df_stats =~ m{^/dev/\S+?\s+(\d+)\s+\d+\s+(\d+)}m;
+
+    # Some filesystems do not limit inodes, so set the number free to -1 in that case
+    $ifree = -1 if($inodes == 0);
+
+    return ($msize, $mused, $mfree, $inodes, $ifree);
 }
 
 
@@ -217,7 +227,7 @@ sub df {
 #  Logging functions (primarily intended as client-side)
 
 ## @fn $ start_log($logname, $timestamp, $logcount)
-# Create a new log file, removing any existing logs that exceed the 
+# Create a new log file, removing any existing logs that exceed the
 # specified log count. This will attempt to remove any old logs before
 # opening the new log.
 #
@@ -236,7 +246,7 @@ sub start_log {
 
     # First, we need to remove all but the latest $logcount logs
     my @files = sort glob("$logname.*");
-    
+
     # There's no point in doing anything with the files, unless there are more
     # that the log count limit available...
     if(scalar(@files) > $logcount) {
@@ -256,7 +266,7 @@ sub start_log {
         $loghandle = undef; # Just to be certain...
         $result .= "Unable to open log file $logname-$timestamp: $!\n\n";
     }
- 
+
     return $result;
 }
 
@@ -282,7 +292,7 @@ sub stop_log(\$$) {
 
         write_log($buffer, $message);
         close($loghandle);
-    } 
+    }
 }
 
 
@@ -297,20 +307,20 @@ sub write_log(\$$) {
 
     # If we have a log file available, write to it
     print $loghandle $message if($loghandle && $message);
-    
+
     # And append to the buffer
     $$buffer .= $message if($buffer);
 }
 
 
 ## @fn void fallover($message, $code)
-# Print an error message to stderr and then exit with the specified code. This 
-# behaves somewhat like die except that it does not need $! to be set and it 
+# Print an error message to stderr and then exit with the specified code. This
+# behaves somewhat like die except that it does not need $! to be set and it
 # is logfile-aware (the message is echoed to the log before it is closed, if the
 # log has been opened.)
 #
 # @param message  The message to print to STDERR.
-# @param code     Optional code to return via exit. If not specified, the value 
+# @param code     Optional code to return via exit. If not specified, the value
 #                 in $! is returned, unless that is zero, in which case 255 is
 #                 returned.
 sub fallover {
@@ -320,7 +330,7 @@ sub fallover {
 
     # Fix up code to be something non-zero (either $! or 255
     $code = $! ? $! : 255 if(!$code);
-    
+
     stop_log($buffer, $message) if($loghandle);
     print STDERR $message;
     exit($code);
