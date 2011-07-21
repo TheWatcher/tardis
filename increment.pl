@@ -111,7 +111,7 @@ sub backup_clearspace {
 
     # Calculate space needed to duplicate backup.0 if needed
     if($inodes) {
-        my $cmd = "$config->{paths}->{find} $mountpoint -printf \"%i\\n\" | $config->{paths}->{sort} -u | $config->{paths}->{wc} -l";
+        my $cmd = "$config->{paths}->{find} $mountpoint/backup.0 -printf \"%i\\n\" | $config->{paths}->{sort} -u | $config->{paths}->{wc} -l";
         my ($cmdunt) = $cmd =~ /^(.*)$/;
 
         my $backupinodes = `$cmdunt`;
