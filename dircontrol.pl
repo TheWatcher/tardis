@@ -81,7 +81,7 @@ sub print_stats {
         printf("Backup usage: %s of %s (%d%%) used, %s (%d%%) free%s.\n",
                humanise($mused), humanise($msize), 100 * ($mused / $msize),
                humanise($mfree), 100 * ($mfree / $msize),
-               $inodes ? sprintf("%d of %d inodes used, %d free", $inodes - $ifree, $inodes, $ifree) : "");
+               $inodes ? sprintf(". %d of %d inodes used, %d free", $inodes - $ifree, $inodes, $ifree) : "");
     } else {
         print "Unable to determine backup statistics.\n";
     }
