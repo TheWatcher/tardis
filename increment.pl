@@ -299,7 +299,7 @@ fallover("ERROR: This script must be run as root to operate successfully.\n")
 
 # We need three arguments: the config, the id of the directory to increment,
 # and the space needed
-if(scalar(@ARGV) == 3) {
+if(scalar(@ARGV) == 4) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
@@ -369,5 +369,5 @@ if(scalar(@ARGV) == 3) {
         fallover("ERROR: directory id must be numeric.\n", 64);
     }
 } else { # if(scalar(@ARGV) == 3) {
-    fallover("ERROR: Incorrect number of arguments.\nUsage: increment.pl <config> <directory id> <space required>\n", 64);
+    fallover("ERROR: Incorrect number of arguments.\nUsage: increment.pl <config> <directory id> <space required> <inodes required>\n", 64);
 }
