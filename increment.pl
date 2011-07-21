@@ -109,6 +109,15 @@ sub backup_clearspace {
         return 0;
     }
 
+    # Calculate space needed to duplicate backup.0 if needed
+    if($inodes) {
+        my $cmd = "$config->{paths}->{find} $mountpoint -printf \"%i\\n\" | $config->{paths}->{sort} -u | $config->{paths}->{wc} -l";
+        my ($cmdunt) = $cmd =~ /^(.*)$/;
+
+        my $backupinodes = `$cmdunt`;
+        $reqinodes += $backupinodes if($backupinodes);
+    }
+
     # Does the required size fit in the free space?
     if($reqbytes <= $free && ($freeinodes == -1 || ($reqinodes < $freeinodes))) {
         print "Requested backup size plus buffer (",humanise($reqbytes),") will fit into available backup space (",humanise($free),").\n";
