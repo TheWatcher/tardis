@@ -122,6 +122,12 @@ sub backup_clearspace {
     if($reqbytes <= $free && ($freeinodes == -1 || ($reqinodes < $freeinodes))) {
         print "Requested backup size plus buffer (",humanise($reqbytes),") will fit into available backup space (",humanise($free),").\n";
         return 1;
+    } else {
+        print "Requested backup does not fit into available space:\n";
+        printf("%d bytes must be freed (%d are needed, %d available)\n",
+               $reqbytes - $free, $reqbytes, $free) if($free < $reqbytes);
+        printf("%d inodes must be freed (%d are needed, %d available)\n",
+               $reqinodes - $freeinodes, $reqinodes, $freeinodes) if($freeinodes > -1 && $freeinodes < $reqinodes);
     }
 
     # Now get a reverse-sorted list of directories to start deleting from
