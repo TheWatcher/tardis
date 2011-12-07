@@ -396,7 +396,7 @@ sub read_pid {
 sub remove_pid {
     my $filename = shift;
 
-    unline($filename)
+    unlink($filename)
         or die "Unable to remove PID file: $filename.\n";
 }
 
