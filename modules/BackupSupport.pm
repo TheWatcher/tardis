@@ -29,7 +29,7 @@ use strict;
 
 our @ISA       = qw(Exporter);
 our @EXPORT    = qw();
-our @EXPORT_OK = qw(path_join humanise dehumanise humanise_minutes is_number start_log stop_log write_log fallover df);
+our @EXPORT_OK = qw(path_join humanise dehumanise humanise_minutes is_number start_log stop_log write_log fallover df write_pid read_pid remove_pid);
 our $VERSION   = 1.0;
 
 # -----------------------------------------------------------------------------
@@ -312,8 +312,7 @@ sub write_log(\$$) {
     $$buffer .= $message if($buffer);
 }
 
-
-## @fn void fallover($message, $code)
+## @fn void fallover($message, $code, $pidfile)
 # Print an error message to stderr and then exit with the specified code. This
 # behaves somewhat like die except that it does not need $! to be set and it
 # is logfile-aware (the message is echoed to the log before it is closed, if the
@@ -323,9 +322,11 @@ sub write_log(\$$) {
 # @param code     Optional code to return via exit. If not specified, the value
 #                 in $! is returned, unless that is zero, in which case 255 is
 #                 returned.
+# @param pidfile  The name of the PID file to remove. If not specified, nothing is done.
 sub fallover {
     my $message = shift;
     my $code    = shift;
+    my $pidfile = shift;
     my $buffer;
 
     # Fix up code to be something non-zero (either $! or 255
@@ -333,7 +334,70 @@ sub fallover {
 
     stop_log($buffer, $message) if($loghandle);
     print STDERR $message;
+
+    remove_pid($pidfile) if($pidfile);
     exit($code);
+}
+
+
+
+# -----------------------------------------------------------------------------
+#  PID file support for exclusivity.
+
+## @fn void write_pid($filename)
+# Write the process id of the current process to the specified file. This will
+# attempt to open the specified file and write the current processes' ID to
+# it for use by other processes.
+#
+# @param filename The name of the file to write the process ID to.
+sub write_pid {
+    my $filename = shift;
+
+    open(PIDFILE, "> $filename")
+        or die "FATAL: Unable to open PID file for writing: $!\n";
+
+    print PIDFILE $$;
+
+    close(PIDFILE);
+}
+
+
+## @fn $ read_pid($filename)
+# Attempt to read a PID from the specified file. This will read the file, if possible,
+# and verify that the content is a single string of digits.
+#
+# @param filename The name of the file to read the process ID from.
+# @return The process ID. This function will die on error.
+sub read_pid {
+    my $filename = shift;
+
+    open(PIDFILE, "< $filename")
+        or die "FATAL: Unable to open PID file for reading: $!\n";
+
+    my $pid = <PIDFILE>;
+    close(PIDFILE);
+
+    chomp($pid); # should not be needed, but best to be safe.
+
+    my ($realpid) = $pid =~ /^(\d+)$/;
+
+    die "FATAL: PID file does not appear to contain a valid process id.\n"
+        unless($realpid);
+
+    return $realpid;
+}
+
+
+## @fn void remove_pid($filename)
+# Remove the specified PID file. This will remove the specified PID file if
+# it exists.
+#
+# @param filename The name of the file to read the process ID from.
+sub remove_pid {
+    my $filename = shift;
+
+    unline($filename)
+        or die "Unable to remove PID file: $filename.\n";
 }
 
 1;

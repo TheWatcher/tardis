@@ -43,9 +43,11 @@ BEGIN {
 }
 use lib "$path/modules"; # Add the script path for module loading
 
+use constant PIDFILENAME => "/var/run/tardis";
+
 # Custom modules to handle configuration settings and backup operations
 use ConfigMicro;
-use BackupSupport qw(fallover path_join start_log stop_log write_log humanise);
+use BackupSupport qw(fallover path_join start_log stop_log write_log humanise write_pid read_pid remove_pid);
 
 $SIG{__WARN__} = sub
 {
@@ -227,23 +229,29 @@ sub directory_backup {
     return $result."\n";
 }
 
+# Enforce exclusivity
+if(-f PIDFILENAME) {
+    my $pid = read_pid(PIDFILENAME);
+    die "ERROR: another instance of tardis is already running (pid: $pid). Only one tardis may run on a system at once.\n";
+}
+write_pid(PIDFILENAME);
 
 # We need one argument - the config name
 if(scalar(@ARGV) == 1) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
-    fallover("ERROR: The specified config file name is not valid, or does not exist")
+    fallover("ERROR: The specified config file name is not valid, or does not exist", 255, PIDFILENAME)
         if(!$configfile || !-f "$path/config/$configfile.cfg");
 
     # Bomb if the config file is not at most 600
     my $mode = (stat("$path/config/$configfile.cfg"))[2];
-    fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
+    fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77, PIDFILENAME)
         if($mode & 07177);
 
     # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
-        or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
+        or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74, PIDFILENAME);
 
     # Store the config name for later
     $config -> {"configname"} = $configfile;
@@ -338,5 +346,7 @@ if(scalar(@ARGV) == 1) {
         print STDERR "Contents of email would be:\n",$email;
     }
 } else { # if(scalar(@ARGV) == 1) {
-    fallover("Usage: tardis.pl <config>\n", 64);
+    fallover("Usage: tardis.pl <config>\n", 64, PIDFILENAME);
 }
+
+remove_pid(PIDFILENAME);
