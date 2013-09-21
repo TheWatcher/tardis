@@ -190,22 +190,26 @@ sub directory_backup {
 
         # If we can't determine the file size, something may be wrong
         if(defined($update) && defined($inodes)) {
-            $result .= "Incrementing remote backup, $update bytes required for current backup.\n";
-            my $inc  = `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{shift} $config->{configname} $id $update $inodes 2>&1'`;
-            $result .= $inc;
+            if($update) {
+                $result .= "Incrementing remote backup, $update bytes required for current backup.\n";
+                my $inc  = `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{shift} $config->{configname} $id $update $inodes 2>&1'`;
+                $result .= $inc;
 
-            # Do nothing if there were errors
-            if($inc =~ /ERROR:/) {
-                $result .= "ERROR: Remote system reported one or more errors. Aborting directory backup.";
+                # Do nothing if there were errors
+                if($inc =~ /ERROR:/) {
+                    $result .= "ERROR: Remote system reported one or more errors. Aborting directory backup.\n";
 
-                # Otherwise go ahead and rsync
+                    # Otherwise go ahead and rsync
+                } else {
+                    $result .= "Updating remote backup.\n";
+                    $result .= `$config->{paths}->{rsync} -avz --delete $exclude --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
+                    $result .= "Remote sync completed.\n";
+
+                    # and now mark the update
+                    $result .= `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{mark} $config->{configname} $id $config->{starttime} 2>&1'`;
+                }
             } else {
-                $result .= "Updating remote backup.\n";
-                $result .= `$config->{paths}->{rsync} -avz --delete $exclude --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
-                $result .= "Remote sync completed.\n";
-
-                # and now mark the update
-                $result .= `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{mark} $config->{configname} $id $config->{starttime} 2>&1'`;
+                $result .= "Skipping increment: no updates since last backup\n";
             }
         } else {
             $result .= "ERROR: Unable to determine rsync transfer amount. Backup aborted for safety.\n";
