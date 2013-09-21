@@ -79,12 +79,12 @@ sub mysql_backup {
     # If the database name is '' then we want to dump all databases
     if(!$dbname) {
         $result .= "Dumping all databases to $filename\n";
-        $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -A -a -e > $filename`;
+        $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -A -E -a -e > $filename`;
 
     # Otherwise, we just want that one database...
     } else {
         $result .= "Dumping $dbname to $filename\n";
-        $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -a -e $dbname > $filename`;
+        $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -E -a -e $dbname > $filename`;
     }
 
     my $starttime = time();
