@@ -27,7 +27,7 @@ use FindBin;             # Work out where we are
 my $path;
 BEGIN {
     $ENV{"PATH"} = ""; # Force no path.
-    
+
     delete @ENV{qw(IFS CDPATH ENV BASH_ENV)}; # Clean up ENV
 
     # $FindBin::Bin is tainted by default, so we need to fix that
@@ -39,7 +39,7 @@ use lib "$path/modules"; # Add the script path for module loading
 
 # Custom modules to handle configuration settings and backup operations
 use BackupSupport qw(path_join is_number humanise dehumanise fallover df);
-use ConfigMicro; 
+use ConfigMicro;
 
 $SIG{__WARN__} = sub
 {
@@ -48,7 +48,7 @@ $SIG{__WARN__} = sub
 };
 
 
-# We need three arguments: the config, the id of the directory to mark the 
+# We need three arguments: the config, the id of the directory to mark the
 # latest snapshot in, and the timestamp
 if(scalar(@ARGV) == 3) {
 
@@ -62,7 +62,7 @@ if(scalar(@ARGV) == 3) {
     fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
-    # Load the configuration 
+    # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
         or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
@@ -77,21 +77,24 @@ if(scalar(@ARGV) == 3) {
             if($ARGV[2] =~ /^\d+$/) {
 
                 # Work out what the mountpoint for the directory is...
-                my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$ARGV[1]"} -> {"remotedir"});
-                
+                my $base = $config -> {"directory.$ARGV[1]"} -> {"base"};
+                $base = $config -> {"server"} -> {"base"} if(!$base);
+
+                my $mountpoint = path_join($base, $config -> {"directory.$id"} -> {"remotedir"});
+
                 # Okay, make sure that the directory exists
                 if(-d $mountpoint) {
                     # Now we need to grab the metafile
                     my $metafile = ConfigMicro -> new(path_join($mountpoint, ".tardis_meta"));
                     if($metafile) {
-                        
+
                         # Update the latest backup entry
                         $metafile -> {"snapshots"} -> {"backup.0"} = $ARGV[2];
-                        
+
                         # And save...
                         $metafile -> write(undef, 1)
                             or fallover("ERROR: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
-                        
+
                         print "Snapshot timestamped successfully.\n";
                     } else {
                         fallover("ERROR: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
@@ -100,7 +103,7 @@ if(scalar(@ARGV) == 3) {
 
                     fallover("ERROR: backup directory does not exist. This should not happen.\n", 74);
                 }
-            
+
             } else { # if($ARGV[2] =~ /^\d+$/) {
                 fallover("ERROR: timestamp be numeric.\n", 64);
             }

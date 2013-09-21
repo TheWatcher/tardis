@@ -333,7 +333,10 @@ if(scalar(@ARGV) == 4) {
                 if($config -> {"directory.$ARGV[1]"}) {
 
                     # Work out what the mountpoint for the directory is...
-                    my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$ARGV[1]"} -> {"remotedir"});
+                    my $base = $config -> {"directory.$id"} -> {"base"};
+                    $base = $config -> {"server"} -> {"base"} if(!$base);
+
+                    my $mountpoint = path_join($base, $config -> {"directory.$ARGV[1]"} -> {"remotedir"});
 
                     # Okay, make sure that the directory exists
                     if(-d $mountpoint) {

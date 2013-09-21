@@ -327,7 +327,10 @@ sub mount {
     if($config -> {"directory.$id"}) {
 
         # Precalculate some things to make the later calls less-brainbendy
-        my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$id"} -> {"remotedir"});
+        my $base = $config -> {"directory.$id"} -> {"base"};
+        $base = $config -> {"server"} -> {"base"} if(!$base);
+
+        my $mountpoint = path_join($base, $config -> {"directory.$id"} -> {"remotedir"});
         my $imagefile  = $mountpoint.".timg";
         my $filesize   = dehumanise($config -> {"directory.$id"} -> {"maxsize"});
 
@@ -383,7 +386,10 @@ sub unmount {
     if($config -> {"directory.$id"}) {
 
         # Precalculate some things to make the later calls less-brainbendy
-        my $mountpoint = path_join($config -> {"server"} -> {"base"}, $config -> {"directory.$id"} -> {"remotedir"});
+        my $base = $config -> {"directory.$id"} -> {"base"};
+        $base = $config -> {"server"} -> {"base"} if(!$base);
+
+        my $mountpoint = path_join($base, $config -> {"directory.$id"} -> {"remotedir"});
         my $imagefile  = $mountpoint.".timg";
 
         # Don't bother doing anything if the mountpoint isn't there
