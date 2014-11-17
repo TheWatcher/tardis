@@ -78,8 +78,12 @@ sub mysql_backup {
     # Work out the destination name
     my $filename = path_join($config -> {"client"} -> {"tmpdir"}, $dumpname.'-'.$config -> {"timestamp"}.'.sql');
 
-    my $login = "-u $username --password=$password ";
-    $login = " --login-path=$loginpath " if($loginpath);
+    my $login = "";
+    if($loginpath) {
+        $login = " --login-path=$loginpath ";
+    } else {
+        $login = "-u $username --password=$password ";
+    }
 
     # If the database name is '' then we want to dump all databases
     if(!$dbname) {
