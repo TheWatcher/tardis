@@ -62,29 +62,34 @@ $SIG{__WARN__} = sub
 # mysql database (or all databases, if the db name is not specified),
 # pack the resulting dump, and copy it to the remote backup system.
 #
-# @param dumpname The name of the dump file, will have the timestamp appended.
-# @param dbname   The name of the database to dump. All databases are
-#                 dumped into one big dump file if this is '' or undef.
-# @param username The username to connect to the database with.
-# @param password The password to use for the database connection.
+# @param dumpname  The name of the dump file, will have the timestamp appended.
+# @param dbname    The name of the database to dump. All databases are
+#                  dumped into one big dump file if this is '' or undef.
+# @param username  The username to connect to the database with.
+# @param password  The password to use for the database connection.
+# @param loginpath The loginpath to use to log into mysql. If specified,
+#                  username and password are ignored.
 # @param config   A reference to the global config object.
 # @return A string containing progress information.
 sub mysql_backup {
-    my ($dumpname, $dbname, $username, $password, $config) = @_;
+    my ($dumpname, $dbname, $username, $password, $loginpath, $config) = @_;
     my $result = "";
 
     # Work out the destination name
     my $filename = path_join($config -> {"client"} -> {"tmpdir"}, $dumpname.'-'.$config -> {"timestamp"}.'.sql');
 
+    my $login = "-u $username --password=$password ";
+    $login = " --login-path=$loginpath " if($loginpath);
+
     # If the database name is '' then we want to dump all databases
     if(!$dbname) {
         $result .= "Dumping all databases to $filename\n";
-        $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -A -E -a -e > $filename`;
+        $result .= `$config->{paths}->{mysql} $login -Q -C -A -E -a -e > $filename`;
 
     # Otherwise, we just want that one database...
     } else {
         $result .= "Dumping $dbname to $filename\n";
-        $result .= `$config->{paths}->{mysql} -u $username --password=$password -Q -C -E -a -e $dbname > $filename`;
+        $result .= `$config->{paths}->{mysql} $login -Q -C -E -a -e $dbname > $filename`;
     }
 
     my $starttime = time();
@@ -300,6 +305,7 @@ if(scalar(@ARGV) == 1) {
                                       $config -> {$key} -> {"dbname"},
                                       $config -> {$key} -> {"username"},
                                       $config -> {$key} -> {"password"},
+                                      $config -> {$key} -> {"loginpath"},
                                       $config);
                 write_log($email, $res);
 
