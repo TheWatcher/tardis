@@ -43,7 +43,7 @@ BEGIN {
 }
 use lib "$path/modules"; # Add the script path for module loading
 
-use constant PIDFILENAME => "/var/run/tardis";
+Use constant PIDFILENAME => "/var/run/tardis";
 
 # Custom modules to handle configuration settings and backup operations
 use ConfigMicro;
@@ -250,7 +250,7 @@ if(-f PIDFILENAME) {
 write_pid(PIDFILENAME);
 
 # We need one argument - the config name
-if(scalar(@ARGV) == 1) {
+if(scalar(@ARGV) >= 1) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
@@ -303,6 +303,7 @@ if(scalar(@ARGV) == 1) {
         foreach my $key (sort(keys(%$config))) {
             # Only process actual database entries...
             next unless($key =~ /^database.\d+$/);
+            next if($ARGV[1] && $key ne $ARGV[1]);
 
             if($config -> {$key} -> {"type"} eq "mysql") {
                 my $res =mysql_backup($config -> {$key} -> {"dumpname"},
@@ -326,9 +327,12 @@ if(scalar(@ARGV) == 1) {
             # Process all the backup directories.
             write_log($email, "Backing up directory trees...\n");
             foreach my $key (sort(keys(%$config))) {
+                next if($ARGV[1] && $key ne $ARGV[1]);
+
                 # Only process actual directory entries...
                 next unless($key =~ /^directory.(\d+)$/);
                 my $dirid = $1;
+
 
                 my $res = directory_backup($dirid, $config);
                 write_log($email,$res);
