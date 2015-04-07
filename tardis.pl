@@ -195,7 +195,7 @@ sub directory_backup {
 
         # Parse out the amount to be transferred and the file count
         my ($update) = $trans =~ /^Total transferred file size: ([\d,]+) bytes$/m;
-        my ($inodes) = $trans =~ /^Number of files transferred: ([\d,]+)$/m;
+        my ($inodes) = $trans =~ /^Number of regular files transferred: ([\d,]+)$/m;
 
         # If we can't determine the file size, something may be wrong
         if(defined($update) && defined($inodes)) {
