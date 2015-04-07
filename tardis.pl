@@ -224,7 +224,7 @@ sub directory_backup {
                 $result .= "Skipping increment: no updates since last backup\n";
             }
         } else {
-            $result .= "ERROR: Unable to determine rsync transfer amount. Backup aborted for safety.\n";
+            $result .= "ERROR: Unable to determine rsync transfer amount. Backup aborted for safety.\nResponse from rsync was:\n$trans\n";
         }
 
         # Try to unmount the remote image
