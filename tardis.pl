@@ -43,7 +43,7 @@ BEGIN {
 }
 use lib "$path/modules"; # Add the script path for module loading
 
-Use constant PIDFILENAME => "/var/run/tardis";
+use constant PIDFILENAME => "/var/run/tardis";
 
 # Custom modules to handle configuration settings and backup operations
 use ConfigMicro;
