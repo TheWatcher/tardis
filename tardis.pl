@@ -189,6 +189,21 @@ sub directory_backup {
         $exclude .= " --exclude-from='".$config -> {"directory.$id"} -> {"excludefile"}."'"
             if($config -> {"directory.$id"} -> {"excludefile"} && -f $config -> {"directory.$id"} -> {"excludefile"});
 
+        # And any inclusion rules
+        my $include = "";
+        if($config -> {"directory.$id"} -> {"include"}) {
+            my @includes = split(/,/,$config -> {"directory.$id"} -> {"include"});
+
+            # Build up a series of --include arguments
+            foreach my $rule (@includes) {
+                $include .= " --include='$rule'";
+            }
+        }
+
+        # If the config has an include file set, record it.
+        $include .= " --include-from='".$config -> {"directory.$id"} -> {"includefile"}."'"
+            if($config -> {"directory.$id"} -> {"includefile"} && -f $config -> {"directory.$id"} -> {"includefile"});
+
         # now we need to work out how much data will be transferred, so we know how much to delete
         $result .= "Calculating how much data will be transferred.\n";
         my $trans = `$config->{paths}->{rsync} -az --delete $exclude --dry-run --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
