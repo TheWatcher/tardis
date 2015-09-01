@@ -54,17 +54,17 @@ if(scalar(@ARGV) == 3) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
-    faillover("ERROR: The specified config file name is not valid, or does not exist")
+    faillover("ERROR[marksnapshot]: The specified config file name is not valid, or does not exist")
         if(!$configfile || !-f "$path/config/$configfile.cfg");
 
     # Bomb if the config file is not at most 600
     my $mode = (stat("$path/config/$configfile.cfg"))[2];
-    fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
+    fallover("ERROR[marksnapshot]: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
     # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
-        or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
+        or fallover("ERROR[marksnapshot]: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
 
     # check that the second argument - the directory id - is actually numeric
@@ -93,26 +93,26 @@ if(scalar(@ARGV) == 3) {
 
                         # And save...
                         $metafile -> write(undef, 1)
-                            or fallover("ERROR: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
+                            or fallover("ERROR[marksnapshot]: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
 
                         print "Snapshot timestamped successfully.\n";
                     } else {
-                        fallover("ERROR: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
+                        fallover("ERROR[marksnapshot]: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
                     }
                 } else { # if(-d $mountpoint) {
 
-                    fallover("ERROR: backup directory does not exist. This should not happen.\n", 74);
+                    fallover("ERROR[marksnapshot]: backup directory does not exist. This should not happen.\n", 74);
                 }
 
             } else { # if($ARGV[2] =~ /^\d+$/) {
-                fallover("ERROR: timestamp be numeric.\n", 64);
+                fallover("ERROR[marksnapshot]: timestamp be numeric.\n", 64);
             }
         } else { # if($config -> {"directory.$ARGV[1]"}) {
-            fallover("ERROR: The specified directory id is not valid.\n");
+            fallover("ERROR[marksnapshot]: The specified directory id is not valid.\n");
         }
     } else { # if($ARGV[1] =~ /^\d+$/) {
-        fallover("ERROR: directory id must be numeric.\n", 64);
+        fallover("ERROR[marksnapshot]: directory id must be numeric.\n", 64);
     }
 } else { # if(scalar(@ARGV) == 3) {
-    fallover("ERROR: Incorrect number of arguments.\nUsage: marksnapshot.pl <config> <directory id> <timestamp>\n", 64);
+    fallover("ERROR[marksnapshot]: Incorrect number of arguments.\nUsage: marksnapshot.pl <config> <directory id> <timestamp>\n", 64);
 }

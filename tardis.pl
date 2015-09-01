@@ -115,7 +115,7 @@ sub mysql_backup {
         $result .= "Remote check complete.\n";
 
         # If the cleanup result is an error, do nothing
-        if($clean =~ /ERROR:/) {
+        if($clean =~ /ERROR\[.*?\]:/) {
             $result .= "ERROR: Remote check reported one or more errors. Aborting database backup.\n";
         } else {
             # Otherwise, copy the dump over
@@ -169,7 +169,7 @@ sub directory_backup {
     my $mountres = `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{dirctrl} $config->{configname} $id mount 2>&1'`;
     $result .= $mountres;
 
-    if($mountres =~ /ERROR:/) {
+    if($mountres =~ /ERROR\[.*?\]:/) {
         $result .= "ERROR: Remote system unable to mount image.\n";
     } else {
         $result .= "Remote image mounted successfully.\n";
@@ -223,7 +223,7 @@ sub directory_backup {
                 $result .= $inc;
 
                 # Do nothing if there were errors
-                if($inc =~ /ERROR:/) {
+                if($inc =~ /ERROR\[.*?\]:/) {
                     $result .= "ERROR: Remote system reported one or more errors. Aborting directory backup.\n";
 
                     # Otherwise go ahead and rsync
@@ -246,7 +246,7 @@ sub directory_backup {
         my $umountres = `$config->{paths}->{ssh} $config->{server}->{ssh} '$config->{paths}->{dirctrl} $config->{configname} $id umount 2>&1'`;
         $result .= $umountres;
 
-        if($mountres =~ /ERROR:/) {
+        if($mountres =~ /ERROR\[.*?\]:/) {
             $result .= "ERROR: Remote system unable to unmount image.\n";
         } else {
             $result .= "Remote image unmounted successfully.\n";
@@ -332,7 +332,7 @@ if(scalar(@ARGV) >= 1) {
                                       $config);
                 write_log($email, $res);
 
-                if($res =~ /ERROR:/) {
+                if($res =~ /ERROR\[.*?\]:/) {
                     $abort = 1;
                     write_log($email, "FATAL: Error detected during $key backup. Aborting.\n");
                     last;
@@ -355,7 +355,7 @@ if(scalar(@ARGV) >= 1) {
                 my $res = directory_backup($dirid, $config);
                 write_log($email,$res);
 
-                if($res =~ /ERROR:/) {
+                if($res =~ /ERROR\[.*?\]:/) {
                     $abort = 1;
                     write_log($email, "FATAL: Error detected during $key backup. Aborting.\n");
                     last;

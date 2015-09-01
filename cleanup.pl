@@ -2,9 +2,9 @@
 
 ## @file
 # Server-side script to perform database cleanup tasks for remote backups.
-# This script takes the amount of data that needs to be sent to do the 
-# next backup, and attempts to determine whether there is enough space to 
-# store the new data, and if there is not it will try to delete old dumps 
+# This script takes the amount of data that needs to be sent to do the
+# next backup, and attempts to determine whether there is enough space to
+# store the new data, and if there is not it will try to delete old dumps
 # to make sufficient space.
 #
 # @author  Chris Page &lt;chris@starforge.co.uk&gt;
@@ -30,7 +30,7 @@ use FindBin;             # Work out where we are
 my $path;
 BEGIN {
     $ENV{"PATH"} = ""; # Force no path.
-    
+
     delete @ENV{qw(IFS CDPATH ENV BASH_ENV)}; # Clean up ENV
 
     # $FindBin::Bin is tainted by default, so we need to fix that
@@ -41,7 +41,7 @@ BEGIN {
 use lib "$path/modules"; # Add the script path for module loading
 
 # Custom modules to handle configuration settings and backup operations
-use ConfigMicro; 
+use ConfigMicro;
 use BackupSupport qw(is_number humanise humanise_minutes dehumanise fallover path_join df);
 
 $SIG{__WARN__} = sub
@@ -69,17 +69,17 @@ sub database_cleanup {
     my $required = shift;
     my $config   = shift;
 
-    # Determine whether there's enough space already. First we need the 
+    # Determine whether there's enough space already. First we need the
     # used space...
     my $du =  `$config->{paths}->{du} -sB 1 $path 2>&1`;
     my ($used) = $du =~ /^(\d+)/;
 
     # We need to give up if we can't determine the used space
     if(!defined($used)) {
-        print "ERROR: Unable to determine how much space has been used in the database directory.\n";
+        print "ERROR[cleanup]: Unable to determine how much space has been used in the database directory.\n";
         return 0;
     }
-    
+
     my $limit = dehumanise($config -> {"server"} -> {"dbsize"});
 
     # Get the list of files, ordered by descendng age (oldest first)
@@ -87,7 +87,7 @@ sub database_cleanup {
 
     # was the ls sucessful?
     if(($? & 0xFF00) >> 8 != 0) {
-        print "ERROR: Unable to obtain a list of files in the database backup directory.\nERROR: ls returned: $ls";
+        print "ERROR[cleanup]: Unable to obtain a list of files in the database backup directory.\nERROR[cleanup]: ls returned: $ls";
         return 0;
     }
 
@@ -103,7 +103,7 @@ sub database_cleanup {
         printf("Database dir has %s free of %s (%d%% used), %s (%d%% used) after requested backup.\n",
                humanise($limit - $used), $config -> {"server"} -> {"dbsize"}, 100 * ($used / $limit),
                humanise($limit - ($used + $required)), 100 * (($used + $required) / $limit));
-        
+
         # Work out the average file size
         my $fileavg = ($used + $required) / (scalar(@files) + 1);
         printf("Including current, there are %d backups (%s), average is %s.\n", scalar(@files), humanise_minutes(scalar(@files) * $config -> {"client"} -> {"backupfreq"}), humanise($fileavg));
@@ -120,7 +120,7 @@ sub database_cleanup {
     my $freetarget = ($used + $required) - $limit;
 
     # now drop the forced retain entries if there is a limit set
-    splice(@files, -1 * $config -> {"server"} -> {"forcedbs"}) 
+    splice(@files, -1 * $config -> {"server"} -> {"forcedbs"})
         if($config -> {"server"} -> {"forcedbs"});
 
     # First pass: check whether or not we can delete enough...
@@ -134,7 +134,7 @@ sub database_cleanup {
 
     # If we can't free up enough, just give up
     if($freed < $freetarget) {
-        print "ERROR: Unable to free up enough space for the requested database backup.\n";
+        print "ERROR[cleanup]: Unable to free up enough space for the requested database backup.\n";
         return 0;
     }
 
@@ -157,7 +157,7 @@ sub database_cleanup {
 
         ++$pos;
     }
- 
+
     # Do we have enough freed?
     if($freed >= $freetarget) {
         printf("Cleanup has freed %s by deleting %d old backups. %s (%d%%) will remain after requested backup.\n",
@@ -167,7 +167,7 @@ sub database_cleanup {
 
         # How many files do we have left?
         my $fcount = `$config->{paths}->{ls} -1 $path | $config->{paths}->{wc} -l`;
-        
+
         if($fcount) {
             ++$fcount;
             printf("%d backup files are currently retained, covering %s\n", $fcount, humanise_minutes($fcount * $config -> {"client"} -> {"backupfreq"}));
@@ -175,7 +175,7 @@ sub database_cleanup {
 
         return 1;
     }
-   
+
     # Can't free up enough, boo :(
     return 0;
 }
@@ -208,7 +208,7 @@ sub check_filespace {
     # Work out how much space there is on the drive
     my ($size, $used, $free) = df($path, $config);
 
-    fallover("ERROR: bad response from df for $path.\n", 75)
+    fallover("ERROR[cleanup]: bad response from df for $path.\n", 75)
         if(!defined($size) || !defined($used) || !defined($free));
 
     # Is it enough?
@@ -221,59 +221,59 @@ if(scalar(@ARGV) == 2) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
-    faillover("ERROR: The specified config file name is not valid, or does not exist")
+    faillover("ERROR[cleanup]: The specified config file name is not valid, or does not exist")
         if(!$configfile || !-f "$path/config/$configfile.cfg");
 
     # Bomb if the config file is not at most 600
     my $mode = (stat("$path/config/$configfile.cfg"))[2];
-    fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
+    fallover("ERROR[cleanup]: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
-    # Load the configuration 
+    # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
-        or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
+        or fallover("ERROR[cleanup]: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
 
     # Check that the backup directory exists, reap the contents if it does
     my $dbpath = path_join($config -> {"server"} -> {"base"}, $config -> {"server"} -> {"dbdir"});
     if(-d $dbpath) {
 
-        # Check that the required size is numeric, with an optional trailing K/M/G 
+        # Check that the required size is numeric, with an optional trailing K/M/G
         if(is_number($ARGV[1])) {
-            
+
             # Try to free up enough space for the backup
             if(database_cleanup($dbpath, dehumanise($ARGV[1]), $config)) {
-                
+
                 # Now verify that real space exists!
                 if(!check_filespace($dbpath, dehumanise($ARGV[1]), $config)) {
-                    fallover("ERROR: insufficient free space on device for requested backup.\n", 75);
+                    fallover("ERROR[cleanup]: insufficient free space on device for requested backup.\n", 75);
                 }
 
             # Can't free up enough space, fall over with an error...
             } else {
-                fallover("ERROR: cleanup failed.\n", 75);
+                fallover("ERROR[cleanup]: cleanup failed.\n", 75);
             }
 
         # Back required space argument
         } else { # if(is_number($ARGV[1])) {
-            fallover("ERROR: The specified required size is not a valid number.\n", 64);
+            fallover("ERROR[cleanup]: The specified required size is not a valid number.\n", 64);
         }
 
     # The backup directory doesn't exist
     } else { # if(-d $dbpath) {
         # Can we create the directory?
         if(mkdir($dbpath)) {
-            
+
             # Should existnow , is there space?
             if(!check_filespace($dbpath, dehumanise($ARGV[1]), $config)) {
-                fallover("ERROR: insufficient free space on device for requested backup.\n", 75);
+                fallover("ERROR[cleanup]: insufficient free space on device for requested backup.\n", 75);
             }
         } else {
-            fallover("ERROR: Backup directory is not valid: directory does not exist, and can not be created ($!).\n", 75);
+            fallover("ERROR[cleanup]: Backup directory is not valid: directory does not exist, and can not be created ($!).\n", 75);
         }
     }
 
 # Incorrect number of arguments
 } else { # if(scalar(@ARGV) == 2) {
-    fallover("ERROR: Incorrect number of arguments.\nUsage: cleanup.pl <config> <required space>\n", 64);
+    fallover("ERROR[cleanup]: Incorrect number of arguments.\nUsage: cleanup.pl <config> <required space>\n", 64);
 }

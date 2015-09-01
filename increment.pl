@@ -105,7 +105,7 @@ sub backup_clearspace {
     # If the requested size is larger than the drive, or the drive limits inodes
     # and there aren't enough, give up right now...
     if($reqbytes >= $size || ($inodes && $reqinodes >= $inodes)) {
-        print "ERROR: Requested backup could never fit into the backup image. Enlarge the image and try again.";
+        print "ERROR[increment]: Requested backup could never fit into the backup image. Enlarge the image and try again.";
         return 0;
     }
 
@@ -137,7 +137,7 @@ sub backup_clearspace {
     # Remove the forcibly retained directories from the end of the list
     if($config -> {"server"} -> {"forcesnaps"} > 0) {
         # Are there actually enough backups in the list?
-        fallover("ERROR: unable to safely delete any snapshots to free up space (not enough snapshots present).\n", 74)
+        fallover("ERROR[increment]: unable to safely delete any snapshots to free up space (not enough snapshots present).\n", 74)
             if(scalar(@dirs) <= $config -> {"server"} -> {"forcesnaps"});
 
         # Remove the directories that must be retained
@@ -155,11 +155,11 @@ sub backup_clearspace {
 
         # Check that the directory can be deleted
         my ($dirid) = $deaddir =~ /\.(\d+)$/;
-        fallover("ERROR: Unable to determine directory id from '$deaddir'. Giving up.\n", 74)
+        fallover("ERROR[increment]: Unable to determine directory id from '$deaddir'. Giving up.\n", 74)
             if(!$dirid);
 
         # Prevent directories from being deleted if the id is less than the preserve level
-        fallover("ERROR: Unable to remove forcibly preserved directory '$deaddir'.\n", 74)
+        fallover("ERROR[increment]: Unable to remove forcibly preserved directory '$deaddir'.\n", 74)
             if($config -> {"server"} -> {"forcesnaps"} && $dirid < $config -> {"server"} -> {"forcesnaps"});
 
         my $cmd = "$config->{paths}->{rm} -rf $deaddir";
@@ -171,7 +171,7 @@ sub backup_clearspace {
         # We only need the backup part of the name for the metafile operation
         my ($backup) = $deaddir =~ /(backup.\d+)/;
 
-        fallover("ERROR: Unable to obtain backup id from '$deaddir'. This Should Not Happen!\n")
+        fallover("ERROR[increment]: Unable to obtain backup id from '$deaddir'. This Should Not Happen!\n")
             if(!$backup);
 
         # Remove the appropriate entry from the metafile
@@ -188,7 +188,7 @@ sub backup_clearspace {
     }
 
     # Seems not!
-    print "ERROR: Unable to release enough space for new backup data.\n";
+    print "ERROR[increment]: Unable to release enough space for new backup data.\n";
     return 0;
 }
 
@@ -238,7 +238,7 @@ sub backup_increment {
             }
             print "moved $count directories. Complete\n";
         } else {
-            print "ERROR: last backup directory appears to be 0. Something is very broken!\n";
+            print "ERROR[increment]: last backup directory appears to be 0. Something is very broken!\n";
             return 0;
         }
     }
@@ -300,7 +300,7 @@ sub display_stats {
 
 # First make sure that this script is being run as root (running as non-root
 # would royally mess up permissions retention)
-fallover("ERROR: This script must be run as root to operate successfully.\n")
+fallover("ERROR[increment]: This script must be run as root to operate successfully.\n")
     if($> != 0);
 
 # We need three arguments: the config, the id of the directory to increment,
@@ -309,17 +309,17 @@ if(scalar(@ARGV) == 4) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
-    faillover("ERROR: The specified config file name is not valid, or does not exist")
+    faillover("ERROR[increment]: The specified config file name is not valid, or does not exist")
         if(!$configfile || !-f "$path/config/$configfile.cfg");
 
     # Bomb if the config file is not at most 600
     my $mode = (stat("$path/config/$configfile.cfg"))[2];
-    fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
+    fallover("ERROR[increment]: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
     # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
-        or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
+        or fallover("ERROR[increment]: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
 
     # check that the second argument - the directory id - is actually numeric
@@ -356,27 +356,27 @@ if(scalar(@ARGV) == 4) {
                             # Write back the metafile to record the changes made. This needs to be done even
                             # if the cleanup fails, as we may have deleted directories...
                             $metafile -> write(undef, 1)
-                                or fallover("ERROR: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
+                                or fallover("ERROR[increment]: Unable to write backup metafile. Error was: ".$ConfigMicro::errstr."\n");
 
                             print "Increment completed successfully.\n";
                         } else {
-                            fallover("ERROR: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
+                            fallover("ERROR[increment]: Unable to open backup metafile. Error was: ".$ConfigMicro::errstr."\n");
                         }
                     } else { # if(-d $mountpoint) {
-                        fallover("ERROR: backup directory does not exist. This should not happen.\n", 74);
+                        fallover("ERROR[increment]: backup directory does not exist. This should not happen.\n", 74);
                     }
                 } else { # if($config -> {"directory.$ARGV[1]"}) {
-                    fallover("ERROR: The specified directory id is not valid.\n");
+                    fallover("ERROR[increment]: The specified directory id is not valid.\n");
                 }
             } else { # if(is_number($ARGV[3])) {
-                fallover("ERROR: required inodes must be numeric.\n", 64);
+                fallover("ERROR[increment]: required inodes must be numeric.\n", 64);
             }
         } else { # if(is_number($ARGV[2])) {
-            fallover("ERROR: required space must be numeric.\n", 64);
+            fallover("ERROR[increment]: required space must be numeric.\n", 64);
         }
     } else { # if($ARGV[1] =~ /^\d+$/) {
-        fallover("ERROR: directory id must be numeric.\n", 64);
+        fallover("ERROR[increment]: directory id must be numeric.\n", 64);
     }
 } else { # if(scalar(@ARGV) == 3) {
-    fallover("ERROR: Incorrect number of arguments.\nUsage: increment.pl <config> <directory id> <space required> <inodes required>\n", 64);
+    fallover("ERROR[increment]: Incorrect number of arguments.\nUsage: increment.pl <config> <directory id> <space required> <inodes required>\n", 64);
 }

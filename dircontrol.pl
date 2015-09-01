@@ -124,7 +124,7 @@ sub check_mountpoint {
     if($makepath) {
         # It doesn't exist, can we create it?
         mkdir($path)
-            or warn "ERROR: Unable to create mount path '$path': $!\n";
+            or warn "ERROR[dircontrol]: Unable to create mount path '$path': $!\n";
     }
 
     # Let -d handle the check here...
@@ -153,7 +153,7 @@ sub check_imagefile {
 
     # Otherwise, does it exist in some form? If so, we have a problem
     if(-e $imagefile) {
-        warn "ERROR: imagefile '$imagefile' blocked by existing entry.\n";
+        warn "ERROR[dircontrol]: imagefile '$imagefile' blocked by existing entry.\n";
         return 0;
     }
 
@@ -165,12 +165,12 @@ sub check_imagefile {
     # Check that dd worked and the image is there
     if($dd !~ /^1 byte\s*\(1 B\) copied/m) {
         chomp($dd);
-        warn "ERROR: imagefile $imagefile creation failed. dd returned:\n'$dd'\n";
+        warn "ERROR[dircontrol]: imagefile $imagefile creation failed. dd returned:\n'$dd'\n";
         return 0;
     }
 
     if(!-f $imagefile) {
-        warn "ERROR: imagefile $imagefile is missing after create.\n";
+        warn "ERROR[dircontrol]: imagefile $imagefile is missing after create.\n";
         return 0;
     }
 
@@ -182,14 +182,14 @@ sub check_imagefile {
 
     # check that losetup could be used
     if($losetup =~ /no permission to look at/) {
-        warn "ERROR: unable to create imagefile: $losetup";
+        warn "ERROR[dircontrol]: unable to create imagefile: $losetup";
         return 0;
     }
 
     # Check that we have a useful number from losetup
     my ($loop) = $losetup =~ m{^(/dev/loop/?\d+)$}m;
     if(!$loop) {
-        warn "ERROR: losetup did not provide a valid loop device (result was: $losetup). Unable to format image file.\n";
+        warn "ERROR[dircontrol]: losetup did not provide a valid loop device (result was: $losetup). Unable to format image file.\n";
         return 0;
     }
 
@@ -203,7 +203,7 @@ sub check_imagefile {
     # Is the result of the mkfs zero? Note that $? is the full 16 bit
     # result from wait*(), with the actual result in the upper byte.
     if($status != 0) {
-        warn "ERROR: mkfs call reported an error on exit. Output was: $output";
+        warn "ERROR[dircontrol]: mkfs call reported an error on exit. Output was: $output";
         return 0;
     }
 
@@ -250,13 +250,13 @@ sub mount_imagefile {
 
         # If we can't identify the type, give up.
         if(!$fstest) {
-            warn "ERROR: unable to identify type of filesystem mounted on $mountpoint.\n";
+            warn "ERROR[dircontrol]: unable to identify type of filesystem mounted on $mountpoint.\n";
             return 0;
         }
 
         # We have a type, does it match?
         if($fstest ne $filesystem) {
-            warn "ERROR: type of filesystem mounted on $mountpoint, exected $fstest.\n";
+            warn "ERROR[dircontrol]: type of filesystem mounted on $mountpoint, exected $fstest.\n";
             return 0
         }
 
@@ -273,7 +273,7 @@ sub mount_imagefile {
 
         # Did it work?
         if((($? & 0xFF00) >> 8) != 0) {
-            warn "ERROR: Unable to mount $imagefile on $mountpoint.\nERROR: mount returned: $mount\n";
+            warn "ERROR[dircontrol]: Unable to mount $imagefile on $mountpoint.\nERROR[dircontrol]: mount returned: $mount\n";
             return 0;
         }
     }
@@ -288,7 +288,7 @@ sub mount_imagefile {
 
         # Did we actually get anything?
         if(!$metadata) {
-            warn "ERROR: $imagefile is mounted, but .tardis_meta can not be opened. This Should Not Happen!\nError was: ".$ConfigMicro::errstr;
+            warn "ERROR[dircontrol]: $imagefile is mounted, but .tardis_meta can not be opened. This Should Not Happen!\nError was: ".$ConfigMicro::errstr;
             return 0;
         }
 
@@ -300,7 +300,7 @@ sub mount_imagefile {
 
         $metadata -> set_value("image", "size", $size);
         if(!$metadata -> write($metafile)) {
-            warn "ERROR: $imagefile is mounted, but .tardis_meta can not be written. Error was: ".$ConfigMicro::errstr."\n";
+            warn "ERROR[dircontrol]: $imagefile is mounted, but .tardis_meta can not be written. Error was: ".$ConfigMicro::errstr."\n";
             return 0;
         }
     }
@@ -364,11 +364,11 @@ sub mount {
             }
         }
     } else {
-        warn "ERROR: Invalid directory id specified.\n";
+        warn "ERROR[dircontrol]: Invalid directory id specified.\n";
     }
 
     # Get here and there was a big problem.
-    fallover("ERROR: unable to ensure safe mount. Aborted for safety.\n", 32);
+    fallover("ERROR[dircontrol]: unable to ensure safe mount. Aborted for safety.\n", 32);
 }
 
 
@@ -412,11 +412,11 @@ sub unmount {
 
                 warn "WARNING: Unable to unmount backup image. umount returned: $mount";
             } else {
-                warn "ERROR: $mountpoint isn't mounted?! This should not happen!\n";
+                warn "ERROR[dircontrol]: $mountpoint isn't mounted?! This should not happen!\n";
             }
         }
     } else {
-        warn "ERROR: Invalid directory id specified.\n";
+        warn "ERROR[dircontrol]: Invalid directory id specified.\n";
     }
 
     return 0;
@@ -424,7 +424,7 @@ sub unmount {
 
 
 # First make sure that this script is being run as root
-fallover("ERROR: This script must be run as root to operate successfully.\n")
+fallover("ERROR[dircontrol]: This script must be run as root to operate successfully.\n")
     if($> != 0);
 
 # Make sure that we have enough arguments. We need three: the config name, the id
@@ -433,17 +433,17 @@ if(scalar(@ARGV) == 3) {
 
     # Ensure the config file is valid, and exists
     my ($configfile) = $ARGV[0] =~ /^(\w+)$/;
-    faillover("ERROR: The specified config file name is not valid, or does not exist")
+    faillover("ERROR[dircontrol]: The specified config file name is not valid, or does not exist")
         if(!$configfile || !-f "$path/config/$configfile.cfg");
 
     # Bomb if the config file is not at most 600
     my $mode = (stat("$path/config/$configfile.cfg"))[2];
-    fallover("ERROR: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
+    fallover("ERROR[dircontrol]: $configfile.cfg must have at most mode 600.\nFix the permissions on $configfile.cfg and try again.\n", 77)
         if($mode & 07177);
 
     # Load the configuration
     my $config = ConfigMicro -> new("$path/config/$configfile.cfg")
-        or fallover("ERROR: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
+        or fallover("ERROR[dircontrol]: Unable to load configuration. Error was: $ConfigMicro::errstr\n", 74);
 
 
     # check that the second argument - the directory id - is actually numeric
@@ -456,11 +456,11 @@ if(scalar(@ARGV) == 3) {
         } elsif($ARGV[2] eq "umount") {
             unmount($ARGV[1], $config);
         } else {
-            fallover("ERROR: bad operation selected.\n", 64);
+            fallover("ERROR[dircontrol]: bad operation selected.\n", 64);
         }
     } else { # if($ARGV[1] =~ /^\d+$/) {
-        fallover("ERROR: directory id must be numeric.\n", 64);
+        fallover("ERROR[dircontrol]: directory id must be numeric.\n", 64);
     }
 } else { # if(scalar(@ARGV) == 3) {
-    fallover("ERROR: Incorrect number of arguments.\nUsage: dircontrol.pl <config> <directory id> <mount|umount>\n", 64);
+    fallover("ERROR[dircontrol]: Incorrect number of arguments.\nUsage: dircontrol.pl <config> <directory id> <mount|umount>\n", 64);
 }
