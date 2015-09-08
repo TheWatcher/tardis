@@ -206,7 +206,7 @@ sub directory_backup {
 
         # now we need to work out how much data will be transferred, so we know how much to delete
         $result .= "Calculating how much data will be transferred.\n";
-        my $trans = `$config->{paths}->{rsync} -az --delete $exclude --dry-run --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
+        my $trans = `$config->{paths}->{rsync} -az --delete $exclude $include --dry-run --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
 
         # Parse out the amount to be transferred and the file count
         my ($update) = $trans =~ /^Total transferred file size: ([\d,]+) bytes$/m;
@@ -229,7 +229,7 @@ sub directory_backup {
                     # Otherwise go ahead and rsync
                 } else {
                     $result .= "Updating remote backup.\n";
-                    $result .= `$config->{paths}->{rsync} -avz --delete $exclude --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
+                    $result .= `$config->{paths}->{rsync} -avz --delete $exclude $include --stats --rsync-path="$config->{paths}->{sursync}" $localdir $dest 2>&1`;
                     $result .= "Remote sync completed.\n";
 
                     # and now mark the update
@@ -259,6 +259,7 @@ sub directory_backup {
 
     return $result."\n";
 }
+
 
 # Enforce exclusivity
 if(-f PIDFILENAME) {
